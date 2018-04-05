@@ -166,7 +166,6 @@ class GraphData(object):
         vocab = special + constants
         assert '<unk>' not in vocab
         [self.word2ind[w] for w in vocab]
-        self.word2emb = np.random.uniform(size=(len(self.word2ind), 2))
         return self.word2ind
 
     # TODO: guard against index-out-of-bounds error when preparing trial and
@@ -252,10 +251,10 @@ class GraphData(object):
         return node_inds
 
     def make_node_embeddings(self):
-        # embeddings = np.random.uniform(size=(
-        #     len(self.word2ind), self.emb_dim))
-        embeddings = np.array(range(len(self.word2ind) * self.emb_dim), dtype='float32').reshape(
-            len(self.word2ind), self.emb_dim) * 100
+        embeddings = np.random.uniform(size=(
+            len(self.word2ind), self.emb_dim))
+        # embeddings = np.array(range(len(self.word2ind) * self.emb_dim), dtype='float32').reshape(
+        #     len(self.word2ind), self.emb_dim)
         # embeddings[self.word2ind['<&>'], :] *= 100
         embeddings[0, :] *= 0.0
         # embeddings[self.word2ind['<unk>'], :] *= 0
