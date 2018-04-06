@@ -44,6 +44,9 @@ def formula_to_graph(formula, normalize=False):
         dag_renamed = normalize_graph(dag_renamed)
     return dag_renamed
 
+def make_empty_graph():
+    return nx.DiGraph()
+
 def guess_head_node(graph):
     if 'head_node' in graph.graph:
         return graph.graph['head_node']

@@ -36,7 +36,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.layers import Activation
 
 def make_gather_layer():
-    return Lambda(gather3, output_shape=gather_output_shape3)
+    return Lambda(gather3, output_shape=gather_output_shape3, name='gather')
 
 gather_layer = make_gather_layer()
 
@@ -51,7 +51,9 @@ def tp1_node_update(graph_node_embs, node_rel, node_rel_weight, max_nodes, max_b
     x = gather_layer([graph_node_embs, node_rel])
     logging.debug('After gather3 shape: {0}'.format(x.shape))
 
-    x = Reshape((max_nodes * max_bi_relations, 2 * embed_dim))(x)
+    x = Reshape(
+        (max_nodes * max_bi_relations, 2 * embed_dim),
+        name=label + '_reshape_after_gather')(x)
 
     x = TimeDistributed(
         Dense(
@@ -80,7 +82,7 @@ def tp1_node_update(graph_node_embs, node_rel, node_rel_weight, max_nodes, max_b
 
     x = Lambda(
         lambda xin: K.sum(xin, axis=2),
-        output_shape=(None, max_nodes * max_bi_relations, dense_dim),
+        output_shape=(max_nodes, dense_dim),
         name=label + '_integrate')(x)
     return x
 

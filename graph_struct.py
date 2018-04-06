@@ -23,6 +23,7 @@ import numpy as np
 from nltk2graph import formula_to_graph
 from nltk2graph import get_label
 from nltk2graph import get_node_token
+from nltk2graph import make_empty_graph
 
 import networkx as nx
 
@@ -114,7 +115,13 @@ class GraphData(object):
 
     @staticmethod
     def from_formulas(formulas):
-        graphs = [formula_to_graph(formula, normalize=True) for formula in formulas]
+        graphs = []
+        for formula in formulas:
+            try:
+                graph = formula_to_graph(formula, normalize=True)
+            except Exception as e:
+                graph = make_empty_graph()
+            graphs.append(graph)
         graph_structs = [GraphStructures(g) for g in graphs]
         return GraphData(graph_structs)
 

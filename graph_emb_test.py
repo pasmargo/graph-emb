@@ -58,6 +58,7 @@ outputs, inputs = make_child_parent_branch(
     graph_data.max_bi_relations)
 
 model = Model(inputs=inputs, outputs=outputs)
+model.summary()
 
 model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
 
