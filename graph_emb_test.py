@@ -36,12 +36,12 @@ formulas_str = [
     'exists y. all x. (pred2(y, x) & pred1(y))',
     'exists y. all x. (pred2(y, x) & pred1(y))']
 formulas = [lexpr(f) for f in formulas_str]
-graph_data = GraphData.from_formulas(formulas)
+graph_data = GraphData.from_formulas(formulas, emb_dim=2)
 graph_data.make_matrices()
 
-max_nodes = graph_data.max_nodes
-max_bi_relations = graph_data.max_bi_relations
-max_tri_relations = graph_data.max_treelets
+max_nodes = graph_data.get_max_nodes()
+max_bi_relations = graph_data.get_max_bi_relations()
+max_tri_relations = graph_data.get_max_treelets()
 logging.debug('Embeddings shape: {0}'.format(graph_data.node_embs.shape))
 
 token_emb = Embedding(
@@ -54,8 +54,8 @@ token_emb = Embedding(
 
 outputs, inputs = make_child_parent_branch(
     token_emb,
-    graph_data.max_nodes,
-    graph_data.max_bi_relations)
+    graph_data.get_max_nodes(),
+    graph_data.get_max_bi_relations())
 
 model = Model(inputs=inputs, outputs=outputs)
 model.summary()
@@ -64,15 +64,13 @@ model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['ac
 
 logging.debug('child_node_inds: {0}'.format(graph_data.node_inds.shape))
 logging.debug('Birel child normalizer shape: {0}'.format(graph_data.birel_child_norm.shape))
-logging.debug('Birel child normalizer:\n{0}'.format(graph_data.birel_norm))
+logging.debug('Birel child normalizer:\n{0}'.format(graph_data.birel_child_norm))
 prediction = model.predict([
     graph_data.node_inds,
     graph_data.children,
     graph_data.birel_child_norm,
     graph_data.parents,
     graph_data.birel_parent_norm])
-# prediction = model.predict([
-#     graph_data.node_inds, graph_data.children, graph_data.node_inds, graph_data.parents, graph_data.birel_norm])
 logging.debug('Result:')
 logging.debug(prediction.shape)
 logging.debug('\n{0}'.format(prediction))

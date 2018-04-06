@@ -22,6 +22,7 @@ import keras.backend as K
 from keras.layers.core import Lambda
 
 def gather3(data_and_inds):
+    import tensorflow as tf # necessary when loading model.
     data, inds = data_and_inds
     num_dims = data.shape[2]
     num_inds = inds.shape[2]

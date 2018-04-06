@@ -27,8 +27,6 @@ from nltk2graph import make_empty_graph
 
 import networkx as nx
 
-# TODO: node id 0 should be reserved for "no node".
-
 class GraphStructures(object):
     """
     For a certain graph, it indexes graph structures for all its nodes.
@@ -71,39 +69,53 @@ class GraphStructures(object):
                     self.treelets_right[right].append((left, nid))
         return
 
+# TODO: Set defaults.
+# TODO: Copy parameters.
+# TODO: Manage data splitting.
+# TODO: Make all parameters explicit in __init__.
+# TODO: set maximum number of words and substitute other occurrences by <unk>.
+# TODO: treat <unk> differently to padding.
 class GraphData(object):
     """
     Manages multiple graphs and transforms them into matrices
     for deep learning.
     """
 
-    def __init__(self, graph_structs):
+    def __init__(self,
+        graph_structs,
+        max_nodes=None,
+        max_bi_relations=None,
+        max_tri_relations=None):
+
         self.graph_structs = graph_structs
-        self._max_nodes = None
-        self._max_bi_relations = None
-        self._max_treelets = None
+
+        self._max_nodes = max_nodes
+        self._max_bi_relations = max_bi_relations
+        self._max_treelets = max_tri_relations
+        self.emb_dim = None
+
         self.word2ind = defaultdict(lambda: len(self.word2ind))
         self.special_tokens = [
             '<unk>', '<exists>', '<all>', '<&>', '<|>',
             '<=>', '<Subj>', '<root>']
         self.word2ind['<unk>'] # index 0 for unknown word.
-        self.emb_dim = 2
-        self.node_embs = None
-        self.node_inds = None
-        self._max_nodes = self.max_nodes
-        self._max_bi_relations = self.max_bi_relations
-        self._max_treelets = self.max_treelets
-        logging.info('Max nodes: {0}'.format(self._max_nodes))
-        logging.info('Max bi-relations: {0}'.format(self._max_bi_relations))
-        logging.info('Max treelets: {0}'.format(self._max_treelets))
 
+        # One big matrix with node embeddings for all graphs.
+        self.node_embs = None
+        # For each graph, specifies the global node indices: |graphs| x max_nodes
+        self.node_inds = None
+
+        # Node relationships. `children` and `parents` are binary relations.
         self.children = None
         self.parents = None
+        # These are ternary relations.
         self.treelets_predicate = None
         self.treelets_right = None
         self.treelets_left = None
 
-        self.birel_norm = None
+        # Normalizers.
+        self.birel_child_norm = None
+        self.birel_parent_norm = None
         self.treelets_norm = None
 
     def copy_parameters(self, graph_data):
@@ -112,9 +124,14 @@ class GraphData(object):
         self._max_bi_relations = graph_data._max_bi_relations
         self._max_treelets = graph_data._max_treelets
         self.word2ind = graph_data.word2ind
+        self.node_embs = graph_data.node_embs
 
     @staticmethod
-    def from_formulas(formulas):
+    def from_formulas(formulas,
+        max_nodes=None,
+        max_bi_relations=None,
+        max_tri_relations=None,
+        emb_dim=128):
         graphs = []
         for formula in formulas:
             try:
@@ -123,34 +140,43 @@ class GraphData(object):
                 graph = make_empty_graph()
             graphs.append(graph)
         graph_structs = [GraphStructures(g) for g in graphs]
-        return GraphData(graph_structs)
+        graph_data = GraphData(graph_structs, max_bi_relations, max_tri_relations)
+        graph_data.emb_dim = emb_dim
+        return graph_data
 
-    @property
-    def max_nodes(self):
-        # TODO: compute other statistics.
-        return max(len(gs.graph.nodes) for gs in self.graph_structs) + 1
+    def get_max_nodes(self):
+        if self._max_nodes is not None:
+            return self._max_nodes
+        self._max_nodes = max(len(gs.graph.nodes) for gs in self.graph_structs) + 1
+        return self._max_nodes
 
-    @property
-    def num_words(self):
-        # TODO: compute other statistics.
+    def get_num_words(self):
         return len(self.word2ind)
 
-    @property
-    def max_bi_relations(self):
+    def get_max_bi_relations(self):
+        if self._max_bi_relations is not None:
+            return self._max_bi_relations
         max_children = max(
             len(chs) for gs in self.graph_structs for chs in gs.children.values())
         max_parents = max(
             len(prs) for gs in self.graph_structs for prs in gs.parents.values())
-        return max(max_children, max_parents)
+        self._max_bi_relations = max(max_children, max_parents)
+        return self._max_bi_relations
 
-    @property
-    def max_treelets(self):
-        return max(len(treelets) for gs in self.graph_structs for treelets in itertools.chain(
+    def get_max_treelets(self):
+        if self._max_treelets is not None:
+            return self._max_treelets
+        self._max_treelets = max(
+            len(treelets) for gs in self.graph_structs for treelets in itertools.chain(
             gs.treelets_predicate.values(),
             gs.treelets_right.values(),
             gs.treelets_left.values()))
+        return self._max_treelets
 
     def make_vocabulary(self):
+        if self.word2ind is not None and len(self.word2ind) > 1:
+            logging.info('word2ind already exists. Reusing it.')
+            return self.word2ind
         counter = Counter()
         constants = []
         special = []
@@ -190,7 +216,6 @@ class GraphData(object):
                 for k, rel_nid in enumerate(getattr(gs, relation)[nid]):
                     rel_token = get_node_token(gs.graph, rel_nid)
                     try:
-                        # birel[i, j, k, :] = [nid_token, rel_token]
                         birel[i, j, k, :] = [nid, rel_nid]
                     except IndexError:
                         continue
@@ -263,15 +288,23 @@ class GraphData(object):
         # embeddings = np.array(range(len(self.word2ind) * self.emb_dim), dtype='float32').reshape(
         #     len(self.word2ind), self.emb_dim)
         # embeddings[self.word2ind['<&>'], :] *= 100
-        embeddings[0, :] *= 0.0
+        embeddings[0, :] *= 0.0 # reserved for "no-word" (padding).
         # embeddings[self.word2ind['<unk>'], :] *= 0
         return embeddings
 
     def make_matrices(self):
+        self._max_nodes = self.get_max_nodes()
+        self._max_bi_relations = self.get_max_bi_relations()
+        self._max_treelets = self.get_max_treelets()
+        logging.info('Max nodes: {0}'.format(self._max_nodes))
+        logging.info('Max bi-relations: {0}'.format(self._max_bi_relations))
+        logging.info('Max treelets: {0}'.format(self._max_treelets))
+
         # Populates self.word2ind
         self.make_vocabulary()
 
-        self.node_embs = self.make_node_embeddings()
+        if self.node_embs is None:
+            self.node_embs = self.make_node_embeddings()
         self.node_inds = self.make_node_inds()
         # Makes relations between pairs of nodes (children and parents).
         self.children = self.make_birel_matrix(relation='children')
