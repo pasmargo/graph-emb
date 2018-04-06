@@ -36,7 +36,7 @@ formulas_str = [
     'exists y. all x. (pred2(y, x) & pred1(y))',
     'exists y. all x. (pred2(y, x) & pred1(y))']
 formulas = [lexpr(f) for f in formulas_str]
-graph_data = GraphData.from_formulas(formulas, emb_dim=2)
+graph_data = GraphData.from_formulas(formulas, emb_dim=3)
 graph_data.make_matrices()
 
 max_nodes = graph_data.get_max_nodes()
@@ -55,7 +55,8 @@ token_emb = Embedding(
 outputs, inputs = make_child_parent_branch(
     token_emb,
     graph_data.get_max_nodes(),
-    graph_data.get_max_bi_relations())
+    graph_data.get_max_bi_relations(),
+    embed_dim=graph_data.node_embs.shape[1])
 
 model = Model(inputs=inputs, outputs=outputs)
 model.summary()

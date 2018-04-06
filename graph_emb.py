@@ -17,6 +17,8 @@
 import logging
 import numpy as np
 
+import tensorflow as tf
+
 from gather import gather3
 from gather import gather_output_shape3
 seed = 23
@@ -84,8 +86,8 @@ def tp1_node_update(graph_node_embs, node_rel, node_rel_weight, max_nodes, max_b
         name=label + '_integrate')(x)
     return x
 
-def make_pair_branch(graph_node_embs, max_nodes, max_bi_relations, label='child'):
-    embed_dim = 2
+def make_pair_branch(graph_node_embs, max_nodes, max_bi_relations, embed_dim, label='child'):
+    # embed_dim = 2
     dense_dim = embed_dim
     num_updates = 1
 
@@ -111,7 +113,7 @@ def make_pair_branch(graph_node_embs, max_nodes, max_bi_relations, label='child'
 
     return [graph_node_embs], [node_rel, node_rel_weight]
 
-def make_child_parent_branch(token_emb, max_nodes, max_bi_relations):
+def make_child_parent_branch(token_emb, max_nodes, max_bi_relations, embed_dim=128):
     node_indices = Input(
         shape=(max_nodes,),
         dtype='int32',
@@ -122,11 +124,13 @@ def make_child_parent_branch(token_emb, max_nodes, max_bi_relations):
         graph_node_embs,
         max_nodes,
         max_bi_relations,
+        embed_dim,
         label='child')
     parent_rel_outputs, parent_rel_inputs = make_pair_branch(
         graph_node_embs,
         max_nodes,
         max_bi_relations,
+        embed_dim,
         label='parent')
 
     x = Add(name='child_parent_add')(

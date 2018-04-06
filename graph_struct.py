@@ -69,10 +69,7 @@ class GraphStructures(object):
                     self.treelets_right[right].append((left, nid))
         return
 
-# TODO: Set defaults.
-# TODO: Copy parameters.
 # TODO: Manage data splitting.
-# TODO: Make all parameters explicit in __init__.
 # TODO: set maximum number of words and substitute other occurrences by <unk>.
 # TODO: treat <unk> differently to padding.
 class GraphData(object):
@@ -125,6 +122,7 @@ class GraphData(object):
         self._max_treelets = graph_data._max_treelets
         self.word2ind = graph_data.word2ind
         self.node_embs = graph_data.node_embs
+        self.emb_dim = graph_data.emb_dim
 
     @staticmethod
     def from_formulas(formulas,
@@ -143,6 +141,14 @@ class GraphData(object):
         graph_data = GraphData(graph_structs, max_bi_relations, max_tri_relations)
         graph_data.emb_dim = emb_dim
         return graph_data
+
+    @property
+    def max_nodes(self):
+        return self._max_nodes
+
+    @property
+    def max_bi_relations(self):
+        return self._max_bi_relations
 
     def get_max_nodes(self):
         if self._max_nodes is not None:
@@ -175,8 +181,11 @@ class GraphData(object):
 
     def make_vocabulary(self):
         if self.word2ind is not None and len(self.word2ind) > 1:
-            logging.info('word2ind already exists. Reusing it.')
+            logging.info('word2ind already exists ({0} entries). Reusing it. Some entries are: {1}'.format(
+                len(self.word2ind),
+                list(self.word2ind.items())[:10]))
             return self.word2ind
+        logging.info('word2ind does not exist. Creating it.')
         counter = Counter()
         constants = []
         special = []
@@ -199,6 +208,8 @@ class GraphData(object):
         vocab = special + constants
         assert '<unk>' not in vocab
         [self.word2ind[w] for w in vocab]
+        logging.info('word2ind created. Some entries are: {0}'.format(
+            list(self.word2ind.items())[:10]))
         return self.word2ind
 
     # TODO: guard against index-out-of-bounds error when preparing trial and
@@ -212,16 +223,13 @@ class GraphData(object):
             dtype='int32')
         for i, gs in enumerate(self.graph_structs):
             for j, nid in enumerate(gs.graph.nodes):
-                nid_token = get_node_token(gs.graph, nid)
                 for k, rel_nid in enumerate(getattr(gs, relation)[nid]):
-                    rel_token = get_node_token(gs.graph, rel_nid)
                     try:
                         birel[i, j, k, :] = [nid, rel_nid]
                     except IndexError:
                         continue
         return birel
 
-    # TODO: remove word2ind mapping.
     def make_treelet_matrix(self, relation='treelet_predicate'):
         treelets = np.zeros((
             len(self.graph_structs),
@@ -231,14 +239,11 @@ class GraphData(object):
             dtype='int32')
         for i, gs in enumerate(self.graph_structs):
             for j, nid in enumerate(gs.graph.nodes):
-                nid_token = get_node_token(gs.graph, nid)
                 for k, (rel1_nid, rel2_nid) in enumerate(getattr(gs, relation)[nid]):
-                    rel1_token = get_node_token(gs.graph, rel1_nid)
-                    rel2_token = get_node_token(gs.graph, rel2_nid)
-                    treelets[i, j, k, :] = [
-                        self.word2ind[nid_token],
-                        self.word2ind[rel1_token],
-                        self.word2ind[rel2_token]]
+                    try:
+                        treelets[i, j, k, :] = [nid, rel1_nid, rel2_nid]
+                    except IndexError:
+                        continue
         return treelets
 
     def make_birel_normalizers(self, relation='children'):
@@ -252,11 +257,14 @@ class GraphData(object):
                 degree = len(gs.children[nid]) + len(gs.parents[nid])
                 rel_degree = len(getattr(gs, relation)[nid])
                 for k in range(rel_degree):
-                    birel_norm[i, j, k] = 1. / degree
+                    try:
+                        birel_norm[i, j, k] = 1. / degree
+                    except IndexError:
+                        break
         return birel_norm
             
     def make_treelets_normalizers(self):
-        treelets_norm = np.ones((
+        treelets_norm = np.zeros((
             len(self.graph_structs),
             self._max_nodes,
             1),
