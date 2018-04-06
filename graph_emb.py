@@ -24,16 +24,19 @@ np.random.seed(seed=seed)
 
 import keras.backend as K
 from keras import initializers
-from keras.layers import Input, Dense, TimeDistributed
-from keras.layers import Reshape
+from keras.layers import Add
+from keras.layers import Activation
+from keras.layers import Dense
+from keras.layers import Flatten
+from keras.layers import GlobalMaxPooling1D
+from keras.layers import Input
+from keras.layers import Multiply
 from keras.layers import Permute
 from keras.layers import RepeatVector
-from keras.layers import Flatten
-from keras.layers import Add, Multiply
-from keras.layers import GlobalMaxPooling1D
+from keras.layers import Reshape
+from keras.layers import TimeDistributed
 from keras.layers.core import Lambda
 from keras.layers.normalization import BatchNormalization
-from keras.layers import Activation
 
 def make_gather_layer():
     return Lambda(gather3, output_shape=gather_output_shape3, name='gather')
@@ -58,19 +61,14 @@ def tp1_node_update(graph_node_embs, node_rel, node_rel_weight, max_nodes, max_b
     x = TimeDistributed(
         Dense(
             dense_dim,
-            kernel_initializer=initializers.Ones(),
-            bias_initializer=initializers.Zeros(),
             name=label + '_dense1'))(x)
-    # TODO: re-enable the batch normalization.
-    # x = BatchNormalization(axis=2, name=label + '_bn1')(x)
+    x = BatchNormalization(axis=2, name=label + '_bn1')(x)
     x = Activation('relu')(x)
     x = TimeDistributed(
         Dense(
             dense_dim,
-            kernel_initializer=initializers.Ones(),
-            bias_initializer=initializers.Zeros(),
             name=label + '_dense2'))(x)
-    # x = BatchNormalization(axis=2, name=label + '_bn2')(x)
+    x = BatchNormalization(axis=2, name=label + '_bn2')(x)
     x = Activation('relu')(x)
 
     normalizer = Reshape((max_nodes * max_bi_relations,))(node_rel_weight)
@@ -86,7 +84,6 @@ def tp1_node_update(graph_node_embs, node_rel, node_rel_weight, max_nodes, max_b
         name=label + '_integrate')(x)
     return x
 
-# TODO: Dense use_bias=True
 def make_pair_branch(graph_node_embs, max_nodes, max_bi_relations, label='child'):
     embed_dim = 2
     dense_dim = embed_dim
